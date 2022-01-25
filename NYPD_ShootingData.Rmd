@@ -1,0 +1,151 @@
+---
+title: "NYPD Shooting Data Analysis"
+author: "Tingting.GUO"
+date: "1/6/2022"
+output:
+  html_document: default
+  pdf_document: default
+---
+## NYPD Shooting Incident Data (Historic) Analysis
+This is a breakdown of every shooting incident that occurred in NYC going back to 2006 through the end of the previous calendar year. For more details see <https://catalog.data.gov/dataset/nypd-shooting-incident-data-historic>.
+
+## Importing the NYPD shooting dataset
+Use tidyverse package
+```{r setup}
+library(tidyverse)
+```
+
+Let's read the data and see what we have.
+```{r import_data}
+NYPD_shooting<- read_csv('https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD')
+NYPD_shooting
+summary(NYPD_shooting)
+```                                                                                                                                               
+
+## Tidying the NYPD shooting dataset
+Let's clean up the dataset by changing appropriate variables and getting rid of any columns not needed.  
+```{r tidy_data}
+library(lubridate)
+NYPD_shooting<-NYPD_shooting%>%
+    mutate(OCCUR_DATE= mdy(OCCUR_DATE))%>%
+    select(-c(JURISDICTION_CODE,LOCATION_DESC,STATISTICAL_MURDER_FLAG,X_COORD_CD,Y_COORD_CD,Latitude,Longitude,Lon_Lat)) 
+NYPD_shooting
+```
+
+
+## Visualizing and Analyzing the NYPD shooting dataset
+
+**The dataset grouped by by VIC_RACE**
+```{r visualize_VIC_RACE_data}
+library(dplyr)
+NYPD_shooting_byVICRACE<-NYPD_shooting %>% 
+  group_by(VIC_RACE) %>% 
+  summarise(count = n())%>%
+  mutate(freq = round(count / sum(count), 4))
+NYPD_shooting_byVICRACE
+  
+```
+
+**Plot the data grouped by VIC_RACE**
+```{r plot_VIC_RACE_data}
+library(ggplot2)
+ggplot(NYPD_shooting_byVICRACE, aes(VIC_RACE, freq)) + 
+   geom_bar(stat="identity", position="dodge",fill = "red")  # +coord_flip()
+  
+```   
+
+We can see the NYPD shooting incident victims are most frequently Black (71.5%),and then Hispanic victims account for (White Hispanic 14.6%,Black Hispanic 9.52%) of all victims while White victims account for (2.63%) and Asian/Pacific Islanders account for (1.39%).
+
+
+
+**The dataset grouped by BORO** 
+```{r visualize_BORO_data}
+NYPD_shooting_byBORO<-NYPD_shooting %>% 
+  group_by(BORO) %>% 
+  summarise(count = n())%>%
+  mutate(freq = round(count / sum(count), 4))
+NYPD_shooting_byBORO
+
+```
+
+**Plot the data grouped by BORO**
+```{r plot_BORO_data}
+ggplot(NYPD_shooting_byBORO, aes(BORO, freq)) + 
+    geom_bar(stat="identity", position="dodge",fill = "red")
+```   
+
+The NYPD shooting incidents mainly occurred in BRONX,QUEENS,BROOKLYN,MANHATTAN,and STATEN ISLAND,and it most frequently occurred in BROOKLYN (41.3%) and BRONX (28.4%).
+
+ 
+ 
+**The dataset grouped by OCCUR_YEAR** 
+ ```{r visualize_OCCUR_YEAR_data}
+NYPD_shooting_byOCCUR_YEAR<-NYPD_shooting %>% 
+  mutate(year=year(strptime(OCCUR_DATE, '%Y')) %>% as.character() ) %>% 
+  group_by(year) %>% 
+  summarise(count = n())%>%
+  mutate(freq = round(count / sum(count), 4))
+NYPD_shooting_byOCCUR_YEAR
+summary(NYPD_shooting_byOCCUR_YEAR)
+ ```
+**Plot the data grouped by OCCUR_YEAR**
+```{r plot_OCCUR_YEAR_data}
+NYPD_shooting_byOCCUR_YEAR%>% 
+  filter(count>0)%>%
+  ggplot(aes(x=year, y=count))+
+  geom_point(aes(color="count"))+
+  theme(legend.position = "bottom",axis.text.x = element_text(angle = 90))+
+  labs(title = "NYPD shooting data",y=NULL)
+```
+
+From 2006 to 2020, the maximum of NYPD shooting incidents was 2055 in 2006, the minimum was 958 in 2018, and the average was 1572 per year. From 2006 to 2019, we can see a general downward trend of the shooting incidents, but the number rose again to nearly 2000 in 2020, This may be related to the COVID-19 outbreak.
+
+
+
+**The dataset grouped by OCCUR_HOUR**
+```{r visualize_OCCUR_HOUR_data}
+NYPD_shooting_byOCCUR_HOUR<-NYPD_shooting %>% 
+  mutate(hour=hour(strptime(OCCUR_TIME, '%H')) %>% as.character() ) %>% 
+  group_by(hour) %>% 
+  summarise(count = n())%>%
+  mutate(freq = round(count / sum(count), 4))
+NYPD_shooting_byOCCUR_HOUR
+summary(NYPD_shooting_byOCCUR_HOUR)
+``` 
+  
+**Plot the data grouped by OCCUR_HOUR**  
+```{r plot_OCCUR_HOUR_data}
+NYPD_shooting_byOCCUR_HOUR%>% 
+  filter(count>0)%>%
+  ggplot(aes(x=as.integer(hour), y=count))+
+  geom_point(aes(color="count"))+
+  theme(legend.position = "bottom",axis.text.x = element_text(angle = 90))+
+  labs(title = "NYPD shooting data",y=NULL)
+``` 
+
+The shooting incidents more frequently occurred at night, the maximum was 1996 at around 23 o'clock，and the minimum was 177 at aroud 9 o'clock. 
+
+
+
+## Modeling the NYPD shooting dataset
+```{r model_OCCUR_HOUR_data}
+mod<-lm(count ~ poly(as.integer(hour), 2, raw=TRUE),data = NYPD_shooting_byOCCUR_HOUR)
+summary(mod)
+
+
+NYPD_shooting_hour_pred<-NYPD_shooting_byOCCUR_HOUR%>%mutate(pred=predict(mod))
+NYPD_shooting_hour_pred
+
+NYPD_shooting_hour_pred%>% ggplot()+
+  geom_point(aes(x=as.integer(hour),y=count),color="blue")+
+  geom_point(aes(x=as.integer(hour),y=pred),color="red")
+
+``` 
+
+So we can see the model（shooting count = 1992.6127 -$300.9246\times hour$ + $13.6026\times hour^2$,and the p-value is very low) does a reasonably good job of predicting the total shooting incidents occurred at different time in a day. 
+
+
+## Bias and Conclusion
+When collecting data,the shooting incidents may be not easy to be found and reported in some certain places and at some certain time, so there will be sources of bias in the data.
+
+In this NYPD shooting data analysis, it indicates that victims are most frequently Black and the incidents most frequently occurred at night and in BROOKLYN and BRONX.
